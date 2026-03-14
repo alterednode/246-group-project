@@ -20,6 +20,10 @@ def time_to_total_minutes(hour, minute):
     hour = hour % 12 #Handles 24-hour time inputs
     return hour * 60 + minute
 
+def min_to_steps(minute):
+    steps_per_minute = STEPS_PER_FULL_CLOCK_CYCLE / MINUTES_PER_FULL_CLOCK_CYCLE
+    return round(minute * steps_per_minute)
+
 
 def time_to_motor_steps(hour, minute):
     """
