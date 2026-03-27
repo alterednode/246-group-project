@@ -1,12 +1,27 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 try:
     from .transit_route import TransitRoute, TransitStep, get_transit_route
+    from ..env import load_env_file
 except ImportError:
     from transit_route import TransitRoute, TransitStep, get_transit_route
+    from pathlib import Path
+
+    def load_env_file() -> None:
+        env_path = Path(__file__).resolve().parents[3] / ".env"
+        if not env_path.exists():
+            return
+        for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip("'\"")
+            if key and key not in os.environ:
+                os.environ[key] = value
 
 
 def main() -> None:
@@ -34,23 +49,6 @@ def main() -> None:
     print_route(route)
 
 
-def load_env_file() -> None:
-    env_path = Path(__file__).resolve().parents[3] / ".env"
-    if not env_path.exists():
-        return
-
-    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-
-        key, value = line.split("=", 1)
-        key = key.strip()
-        value = value.strip().strip("'\"")
-        if key and key not in os.environ:
-            os.environ[key] = value
-
-
 def print_route(route: TransitRoute) -> None:
     print()
     print(f"From: {route.start_address}")
@@ -59,9 +57,9 @@ def print_route(route: TransitRoute) -> None:
     if route.distance:
         print(f"Distance: {route.distance}")
     if route.departure_time:
-        print(f"Departure: {route.departure_time}")
+        print(f"Departure: {route.departure_time.isoformat()}")
     if route.arrival_time:
-        print(f"Arrival: {route.arrival_time}")
+        print(f"Arrival: {route.arrival_time.isoformat()}")
 
     print("\nSteps:")
     for index, step in enumerate(route.steps, start=1):
