@@ -1,46 +1,71 @@
-from __future__ import annotations
-
-from datetime import datetime, tzinfo
-
 """
-Converts a leave time into the number of motor steps required
-to rotate the clock from the reset position (12:00) to the
-correct display time.
+Clock mapping 
 
-Assumptions:
-1) The clock resets to 12:00 before each update
-2) 28BYJ-48 stepper motor (4096 steps per revolution)
+- Uses FULL-STEP motor mode
+- Computes SHORTEST rotation (forward or backward)
+- Returns:
+    steps (int)         -> always positive
+    clockwise (bool)    -> True = forward, False = backward
 """
 
-# Calculate this in the lab
-STEPS_PER_FULL_CLOCK_CYCLE = 5715   # motor steps for 12 hours
+# Updated for FULL-STEP motor
+STEPS_PER_FULL_CLOCK_CYCLE = 2858
 
 # 12 hours = 720 minutes
 MINUTES_PER_FULL_CLOCK_CYCLE = 720
+HALF_CLOCK_CYCLE = MINUTES_PER_FULL_CLOCK_CYCLE // 2  # 360
 
 
-def time_to_total_minutes(hour: int, minute: int) -> int:
-
-    hour = hour % 12  # Handles 24-hour time inputs
+def time_to_total_minutes(hour, minute):
+    """
+    Convert time to minutes on a 12-hour clock.
+    """
+    hour = hour % 12
     return hour * 60 + minute
 
 
-def min_to_steps(minute: int) -> int:
-    steps_per_minute = STEPS_PER_FULL_CLOCK_CYCLE / MINUTES_PER_FULL_CLOCK_CYCLE
-    return round(minute * steps_per_minute)
-
-
-def time_to_motor_steps(hour: int, minute: int) -> int:
+def minutes_to_steps(minutes):
     """
-    Converts a clock time into motor steps
-    starting from the reset position (12:00).
+    Convert minutes of movement into motor steps.
     """
-
-    total_minutes = time_to_total_minutes(hour, minute)
-
     steps_per_minute = STEPS_PER_FULL_CLOCK_CYCLE / MINUTES_PER_FULL_CLOCK_CYCLE
+    return round(minutes * steps_per_minute)
 
-    steps = round(total_minutes * steps_per_minute)
 
-    return steps
+def time_delta_minutes(current_hour, current_minute, target_hour, target_minute):
+    """
+    Compute shortest time difference (in minutes).
+    Positive  -> forward
+    Negative  -> backward
+    """
+    current_total = time_to_total_minutes(current_hour, current_minute)
+    target_total = time_to_total_minutes(target_hour, target_minute)
+
+    diff = target_total - current_total
+
+    if diff > HALF_CLOCK_CYCLE:
+        diff -= MINUTES_PER_FULL_CLOCK_CYCLE
+    elif diff < -HALF_CLOCK_CYCLE:
+        diff += MINUTES_PER_FULL_CLOCK_CYCLE
+
+    return diff
+
+
+def time_delta_to_steps(current_hour, current_minute, target_hour, target_minute):
+    """
+    Convert time difference into:
+    - step count
+    - direction boolean
+    """
+    delta_minutes = time_delta_minutes(
+        current_hour,
+        current_minute,
+        target_hour,
+        target_minute
+    )
+
+    clockwise = delta_minutes >= 0
+    steps = minutes_to_steps(abs(delta_minutes))
+
+    return steps, clockwise
 
