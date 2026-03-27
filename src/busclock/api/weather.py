@@ -42,13 +42,13 @@ class WeatherClient:
         self._api_key = api_key or os.getenv("OPENWEATHER_API_KEY")
         self._location_cache: dict[str, GeocodedLocation] = {}
 
-    async def fetch_current(self, query: str) -> CurrentWeather:
+    async def fetch_current(self, query: str | GeocodedLocation) -> CurrentWeather:
         if not self._api_key:
             raise ValueError(
                 "An OpenWeather API key is required. Set OPENWEATHER_API_KEY."
             )
 
-        LOGGER.debug("Fetching current weather for query=%r", query)
+        LOGGER.debug("Fetching current weather for query=%r", _describe_location_query(query))
         location = await self._get_location(query)
         async with self._session.get(
             OPENWEATHER_CURRENT_URL,
@@ -67,7 +67,7 @@ class WeatherClient:
             payload = await response.json()
         LOGGER.debug(
             "Weather API response received for query=%r resolved_location=%r",
-            query,
+            _describe_location_query(query),
             location.name,
         )
 
@@ -81,7 +81,10 @@ class WeatherClient:
             icon=weather_info.get("icon"),
         )
 
-    async def _get_location(self, query: str) -> GeocodedLocation:
+    async def _get_location(self, query: str | GeocodedLocation) -> GeocodedLocation:
+        if isinstance(query, GeocodedLocation):
+            return query
+
         normalized_query = query.strip()
         if not normalized_query:
             raise ValueError("Weather location query cannot be empty.")
@@ -127,3 +130,9 @@ class WeatherClient:
             location.longitude,
         )
         return location
+
+
+def _describe_location_query(query: str | GeocodedLocation) -> str:
+    if isinstance(query, GeocodedLocation):
+        return query.query
+    return query
