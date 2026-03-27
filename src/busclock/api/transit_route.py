@@ -42,6 +42,10 @@ class TransitRoute:
     duration_minutes: int | None
     distance: str | None
     steps: tuple[TransitStep, ...]
+    start_latitude: float | None = None
+    start_longitude: float | None = None
+    end_latitude: float | None = None
+    end_longitude: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -234,6 +238,10 @@ def _parse_route(route: dict[str, Any]) -> TransitRoute:
     return TransitRoute(
         start_address=leg["start_address"],
         end_address=leg["end_address"],
+        start_latitude=_parse_coordinate((leg.get("start_location") or {}).get("lat")),
+        start_longitude=_parse_coordinate((leg.get("start_location") or {}).get("lng")),
+        end_latitude=_parse_coordinate((leg.get("end_location") or {}).get("lat")),
+        end_longitude=_parse_coordinate((leg.get("end_location") or {}).get("lng")),
         departure_time=_parse_api_time(leg.get("departure_time")),
         arrival_time=_parse_api_time(leg.get("arrival_time")),
         duration=leg["duration"]["text"],
@@ -269,6 +277,12 @@ def _parse_api_time(value: dict[str, Any] | None) -> datetime | None:
     if timestamp is None:
         return None
     return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+
+
+def _parse_coordinate(value: Any) -> float | None:
+    if value is None:
+        return None
+    return float(value)
 
 
 def _strip_html(text: str) -> str:
