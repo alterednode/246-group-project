@@ -18,9 +18,17 @@ async def test_config_endpoint_persists_and_state_endpoint_reflects_latest_confi
 ) -> None:
     @dataclass
     class FakeWeatherClient:
-        async def fetch_current(self, query: str) -> CurrentWeather:
+        called: bool = False
+
+        async def fetch_current(self, query: str | GeocodedLocation) -> CurrentWeather:
+            self.called = True
             return CurrentWeather(
-                location=GeocodedLocation(query=query, name="Kelowna", latitude=1.0, longitude=2.0),
+                location=GeocodedLocation(
+                    query="unused",
+                    name="Kelowna",
+                    latitude=1.0,
+                    longitude=2.0,
+                ),
                 temperature_c=11.0,
                 feels_like_c=9.0,
                 description="cloudy",
@@ -31,10 +39,11 @@ async def test_config_endpoint_persists_and_state_endpoint_reflects_latest_confi
         raise LookupError("No route found for preferred line '97'.")
 
     config_store = ConfigStore(tmp_path / "config.json")
+    weather_client = FakeWeatherClient()
     runtime = BusClockRuntime(
         config_store=config_store,
         transit_fetcher=fake_transit_fetcher,
-        weather_client_factory=lambda session: FakeWeatherClient(),
+        weather_client_factory=lambda session: weather_client,
     )
     await runtime.start()
 
@@ -67,5 +76,7 @@ async def test_config_endpoint_persists_and_state_endpoint_reflects_latest_confi
     assert config_payload["home_location"] == "123 Main St"
     assert config_payload["weather_location_mode"] == "destination"
     assert state_payload["config"]["preferred_bus_line"] == "97"
-    assert state_payload["status"]["weather"]["state"] == "ok"
+    assert state_payload["status"]["weather"]["state"] == "unavailable"
+    assert "coordinates are unavailable" in (state_payload["status"]["weather"]["message"] or "")
     assert state_payload["status"]["transit"]["state"] == "unavailable"
+    assert weather_client.called is False
