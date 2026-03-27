@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -14,8 +15,13 @@ from .api.transit_route import (
     build_route_summary,
     fetch_preferred_transit_route,
 )
-from .api.weather import CurrentWeather, WeatherClient
+from .api.weather import CurrentWeather, GeocodedLocation, WeatherClient
 from .config import AppConfig, ConfigStore
+from .hardware import (
+    run_led_thread,
+    run_motor_thread,
+    run_seven_segment_thread,
+)
 from .state import StateStore, TransitSnapshot, WeatherSnapshot
 
 TransitFetcher = Callable[
@@ -48,6 +54,8 @@ class BusClockRuntime:
         self.state_store = StateStore(self.config_store.load())
         self._transit_fetcher = transit_fetcher or _default_transit_fetcher
         self._weather_client_factory = weather_client_factory or WeatherClient
+        self._hardware_stop_event = threading.Event()
+        self._hardware_threads: list[threading.Thread] = []
         self._session: aiohttp.ClientSession | None = None
         self._weather_client: WeatherClient | None = None
         self._transit_refresh_event = asyncio.Event()
@@ -86,6 +94,7 @@ class BusClockRuntime:
                 )
             ),
         ]
+        self._start_hardware_threads()
         LOGGER.info("Runtime background refresh loops started")
 
     async def stop(self) -> None:
@@ -95,6 +104,7 @@ class BusClockRuntime:
         if self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)
         self._tasks.clear()
+        self._stop_hardware_threads()
 
         if self._session is not None:
             await self._session.close()
@@ -108,7 +118,7 @@ class BusClockRuntime:
         self._weather_refresh_event.set()
 
     async def refresh_transit(self) -> None:
-        config = (await self.state_store.snapshot()).config
+        config = self.state_store.snapshot().config
         LOGGER.debug(
             "Refreshing transit state for origin=%r destination=%r line=%r",
             config.home_location,
@@ -117,7 +127,7 @@ class BusClockRuntime:
         )
         if not config.is_complete():
             LOGGER.info("Skipping transit refresh because config is incomplete")
-            await self.state_store.apply_transit_result(
+            self.state_store.set_transit(
                 None,
                 status="unavailable",
                 message="Transit config is incomplete.",
@@ -131,7 +141,7 @@ class BusClockRuntime:
             selection = await self._transit_fetcher(config, session, now)
         except LookupError as exc:
             LOGGER.warning("Transit refresh found no matching route: %s", exc)
-            await self.state_store.apply_transit_result(
+            self.state_store.set_transit(
                 None,
                 status="unavailable",
                 message=str(exc),
@@ -140,7 +150,7 @@ class BusClockRuntime:
             return
         except Exception as exc:
             LOGGER.warning("Transit refresh failed: %s", exc, exc_info=True)
-            await self.state_store.apply_transit_result(
+            self.state_store.set_transit(
                 None,
                 status="error",
                 message=str(exc),
@@ -156,18 +166,14 @@ class BusClockRuntime:
             snapshot.minutes_until_leave,
         )
         LOGGER.debug("Transit snapshot summary: %s", snapshot.route_summary)
-        await self.state_store.apply_transit_result(snapshot, status="ok")
+        self.state_store.set_transit(snapshot, status="ok")
 
     async def refresh_weather(self) -> None:
-        config = (await self.state_store.snapshot()).config
-        LOGGER.debug(
-            "Refreshing weather state for mode=%s query=%r",
-            config.weather_location_mode,
-            config.weather_query(),
-        )
+        state = self.state_store.snapshot()
+        config = state.config
         if not config.is_complete():
             LOGGER.info("Skipping weather refresh because config is incomplete")
-            await self.state_store.apply_weather_result(
+            self.state_store.set_weather(
                 None,
                 status="unavailable",
                 message="Weather config is incomplete.",
@@ -175,12 +181,17 @@ class BusClockRuntime:
             )
             return
 
-        weather_query = config.weather_query()
         try:
+            weather_query = _resolve_weather_query(config, state.transit)
+            LOGGER.debug(
+                "Refreshing weather state for mode=%s query=%r",
+                config.weather_location_mode,
+                _weather_query_label(weather_query),
+            )
             weather = await self._require_weather_client().fetch_current(weather_query)
         except ValueError as exc:
             LOGGER.warning("Weather refresh unavailable: %s", exc)
-            await self.state_store.apply_weather_result(
+            self.state_store.set_weather(
                 None,
                 status="unavailable",
                 message=str(exc),
@@ -189,7 +200,7 @@ class BusClockRuntime:
             return
         except Exception as exc:
             LOGGER.warning("Weather refresh failed: %s", exc, exc_info=True)
-            await self.state_store.apply_weather_result(
+            self.state_store.set_weather(
                 None,
                 status="error",
                 message=str(exc),
@@ -205,7 +216,7 @@ class BusClockRuntime:
             snapshot.feels_like_c,
         )
         LOGGER.debug("Weather snapshot description=%r icon=%r", snapshot.description, snapshot.icon)
-        await self.state_store.apply_weather_result(snapshot, status="ok")
+        self.state_store.set_weather(snapshot, status="ok")
 
     async def update_config(self, payload: dict[str, Any]) -> AppConfig:
         LOGGER.info("Updating config from web request")
@@ -214,8 +225,9 @@ class BusClockRuntime:
         self.config_store.save(config)
         LOGGER.info("Saved config to %s", self.config_store.path)
         LOGGER.debug("New config: %s", config.to_dict())
-        await self.state_store.set_config(config)
-        await asyncio.gather(self.refresh_transit(), self.refresh_weather())
+        self.state_store.set_config(config)
+        await self.refresh_transit()
+        await self.refresh_weather()
         return config
 
     async def _refresh_loop(
@@ -245,6 +257,54 @@ class BusClockRuntime:
             raise RuntimeError("Runtime has not been started.")
         return self._weather_client
 
+    def _start_hardware_threads(self) -> None:
+        if self._hardware_threads:
+            return
+
+        self._hardware_stop_event.clear()
+        self._hardware_threads = [
+            threading.Thread(
+                name="motor-thread",
+                target=run_motor_thread,
+                kwargs={
+                    "state_store": self.state_store,
+                    "stop_event": self._hardware_stop_event,
+                },
+                daemon=True,
+            ),
+            threading.Thread(
+                name="seven-segment-thread",
+                target=run_seven_segment_thread,
+                kwargs={
+                    "state_store": self.state_store,
+                    "stop_event": self._hardware_stop_event,
+                },
+                daemon=True,
+            ),
+            threading.Thread(
+                name="led-thread",
+                target=run_led_thread,
+                kwargs={
+                    "state_store": self.state_store,
+                    "stop_event": self._hardware_stop_event,
+                },
+                daemon=True,
+            ),
+        ]
+        for thread in self._hardware_threads:
+            thread.start()
+
+    def _stop_hardware_threads(self) -> None:
+        if not self._hardware_threads:
+            return
+
+        self._hardware_stop_event.set()
+        for thread in self._hardware_threads:
+            thread.join(timeout=2.0)
+            if thread.is_alive():
+                LOGGER.warning("Hardware thread %s did not exit cleanly", thread.name)
+        self._hardware_threads.clear()
+
 
 async def _default_transit_fetcher(
     config: AppConfig,
@@ -273,9 +333,15 @@ def build_transit_snapshot(
 
     return TransitSnapshot(
         available=True,
+        requested_home_location=config.home_location,
+        requested_destination=config.destination,
         route_summary=build_route_summary(route),
         start_address=route.start_address,
         end_address=route.end_address,
+        start_latitude=route.start_latitude,
+        start_longitude=route.start_longitude,
+        end_latitude=route.end_latitude,
+        end_longitude=route.end_longitude,
         google_departure_time=route.departure_time,
         google_arrival_time=route.arrival_time,
         bus_departure_time=selection.first_transit_step.departure_time,
@@ -313,6 +379,62 @@ def _format_weather_location(weather: CurrentWeather) -> str:
     if location.country:
         parts.append(location.country)
     return ", ".join(parts)
+
+
+def _resolve_weather_query(
+    config: AppConfig,
+    transit: TransitSnapshot,
+) -> GeocodedLocation:
+    if config.weather_location_mode == "destination":
+        location = _location_from_transit_snapshot(
+            query=config.destination,
+            matched_query=transit.requested_destination,
+            name=transit.end_address,
+            latitude=transit.end_latitude,
+            longitude=transit.end_longitude,
+        )
+        if location is not None:
+            return location
+        raise ValueError(
+            "Weather location coordinates are unavailable until the destination "
+            "route resolves in Google Maps."
+        )
+
+    location = _location_from_transit_snapshot(
+        query=config.home_location,
+        matched_query=transit.requested_home_location,
+        name=transit.start_address,
+        latitude=transit.start_latitude,
+        longitude=transit.start_longitude,
+    )
+    if location is not None:
+        return location
+    raise ValueError(
+        "Weather location coordinates are unavailable until the origin route "
+        "resolves in Google Maps."
+    )
+
+
+def _location_from_transit_snapshot(
+    *,
+    query: str,
+    matched_query: str | None,
+    name: str | None,
+    latitude: float | None,
+    longitude: float | None,
+) -> GeocodedLocation | None:
+    if matched_query != query or latitude is None or longitude is None:
+        return None
+    return GeocodedLocation(
+        query=query,
+        name=name or query,
+        latitude=latitude,
+        longitude=longitude,
+    )
+
+
+def _weather_query_label(query: GeocodedLocation) -> str:
+    return query.query
 
 
 def _minutes_until(target: datetime | None, now: datetime) -> int | None:

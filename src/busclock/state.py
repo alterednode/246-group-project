@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import asyncio
-from dataclasses import dataclass, fields, is_dataclass, replace
+import threading
+from dataclasses import dataclass, field, fields, is_dataclass, replace
 from datetime import datetime, timezone
 from typing import Any
 
@@ -19,9 +19,15 @@ class RefreshStatus:
 @dataclass(frozen=True, slots=True)
 class TransitSnapshot:
     available: bool = False
+    requested_home_location: str | None = None
+    requested_destination: str | None = None
     route_summary: str | None = None
     start_address: str | None = None
     end_address: str | None = None
+    start_latitude: float | None = None
+    start_longitude: float | None = None
+    end_latitude: float | None = None
+    end_longitude: float | None = None
     google_departure_time: datetime | None = None
     google_arrival_time: datetime | None = None
     bus_departure_time: datetime | None = None
@@ -50,10 +56,42 @@ class WeatherSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
+class ClockHandsSnapshot:
+    total_steps_moved: int = 0
+    current_steps: int | None = None
+    last_target_steps: int | None = None
+    last_target_time: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CountdownDisplaySnapshot:
+    text: str | None = None
+    remaining_seconds: int | None = None
+    show_colon: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class LedDisplaySnapshot:
+    active_pattern: str | None = None
+    frame_index: int = 0
+    is_animating: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class HardwareSnapshot:
+    clock_hands: ClockHandsSnapshot = field(default_factory=ClockHandsSnapshot)
+    countdown_display: CountdownDisplaySnapshot = field(
+        default_factory=CountdownDisplaySnapshot
+    )
+    led_display: LedDisplaySnapshot = field(default_factory=LedDisplaySnapshot)
+
+
+@dataclass(frozen=True, slots=True)
 class SystemState:
     config: AppConfig
     transit: TransitSnapshot
     weather: WeatherSnapshot
+    hardware: HardwareSnapshot
     status: dict[str, RefreshStatus]
     updated_at: datetime | None = None
 
@@ -63,26 +101,27 @@ class SystemState:
 
 class StateStore:
     def __init__(self, config: AppConfig) -> None:
-        self._lock = asyncio.Lock()
+        self._lock = threading.Lock()
         self._state = SystemState(
             config=config,
             transit=TransitSnapshot(),
             weather=WeatherSnapshot(),
+            hardware=HardwareSnapshot(),
             status={
                 "transit": RefreshStatus(state="idle"),
                 "weather": RefreshStatus(state="idle"),
             },
         )
 
-    async def snapshot(self) -> SystemState:
-        async with self._lock:
+    def snapshot(self) -> SystemState:
+        with self._lock:
             return replace(self._state, status=dict(self._state.status))
 
-    async def set_config(self, config: AppConfig) -> None:
-        async with self._lock:
+    def set_config(self, config: AppConfig) -> None:
+        with self._lock:
             self._state = replace(self._state, config=config, updated_at=_utcnow())
 
-    async def apply_transit_result(
+    def set_transit(
         self,
         snapshot: TransitSnapshot | None,
         *,
@@ -90,15 +129,25 @@ class StateStore:
         message: str | None = None,
         preserve_existing: bool = False,
     ) -> None:
-        await self._apply_source_result(
-            source="transit",
-            snapshot=snapshot,
-            status=status,
-            message=message,
-            preserve_existing=preserve_existing,
-        )
+        now = _utcnow()
+        with self._lock:
+            transit = self._state.transit
+            if snapshot is not None:
+                transit = snapshot
+            elif not preserve_existing:
+                transit = TransitSnapshot()
+            self._state = replace(
+                self._state,
+                transit=transit,
+                status=_replace_status(
+                    self._state.status,
+                    "transit",
+                    RefreshStatus(state=status, updated_at=now, message=message),
+                ),
+                updated_at=now,
+            )
 
-    async def apply_weather_result(
+    def set_weather(
         self,
         snapshot: WeatherSnapshot | None,
         *,
@@ -106,52 +155,96 @@ class StateStore:
         message: str | None = None,
         preserve_existing: bool = False,
     ) -> None:
-        await self._apply_source_result(
-            source="weather",
-            snapshot=snapshot,
-            status=status,
-            message=message,
-            preserve_existing=preserve_existing,
-        )
+        now = _utcnow()
+        with self._lock:
+            weather = self._state.weather
+            if snapshot is not None:
+                weather = snapshot
+            elif not preserve_existing:
+                weather = WeatherSnapshot()
+            self._state = replace(
+                self._state,
+                weather=weather,
+                status=_replace_status(
+                    self._state.status,
+                    "weather",
+                    RefreshStatus(state=status, updated_at=now, message=message),
+                ),
+                updated_at=now,
+            )
 
-    async def _apply_source_result(
+    def update_clock_hands(
         self,
         *,
-        source: str,
-        snapshot: TransitSnapshot | WeatherSnapshot | None,
-        status: str,
-        message: str | None,
-        preserve_existing: bool,
+        target_steps: int,
+        target_time: datetime,
     ) -> None:
-        now = _utcnow()
-        async with self._lock:
-            statuses = dict(self._state.status)
-            statuses[source] = RefreshStatus(state=status, updated_at=now, message=message)
+        with self._lock:
+            current = self._state.hardware.clock_hands
+            if (
+                current.current_steps == target_steps
+                and current.last_target_time == target_time
+            ):
+                return
 
-            new_transit = self._state.transit
-            new_weather = self._state.weather
-            if source == "transit":
-                if snapshot is not None:
-                    new_transit = snapshot
-                elif not preserve_existing:
-                    new_transit = TransitSnapshot()
-            else:
-                if snapshot is not None:
-                    new_weather = snapshot
-                elif not preserve_existing:
-                    new_weather = WeatherSnapshot()
+            previous_steps = current.current_steps or 0
+            self._state = replace(
+                self._state,
+                hardware=replace(
+                    self._state.hardware,
+                    clock_hands=ClockHandsSnapshot(
+                        total_steps_moved=current.total_steps_moved
+                        + abs(target_steps - previous_steps),
+                        current_steps=target_steps,
+                        last_target_steps=target_steps,
+                        last_target_time=target_time,
+                    ),
+                ),
+                updated_at=_utcnow(),
+            )
 
-            self._state = SystemState(
-                config=self._state.config,
-                transit=new_transit,
-                weather=new_weather,
-                status=statuses,
-                updated_at=now,
+    def update_countdown_display(
+        self,
+        *,
+        text: str,
+        remaining_seconds: int | None,
+        show_colon: bool,
+    ) -> None:
+        with self._lock:
+            current = self._state.hardware.countdown_display
+            if (
+                current.text == text
+                and current.remaining_seconds == remaining_seconds
+                and current.show_colon == show_colon
+            ):
+                return
+
+            self._state = replace(
+                self._state,
+                hardware=replace(
+                    self._state.hardware,
+                    countdown_display=CountdownDisplaySnapshot(
+                        text=text,
+                        remaining_seconds=remaining_seconds,
+                        show_colon=show_colon,
+                    ),
+                ),
+                updated_at=_utcnow(),
             )
 
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _replace_status(
+    statuses: dict[str, RefreshStatus],
+    key: str,
+    value: RefreshStatus,
+) -> dict[str, RefreshStatus]:
+    updated = dict(statuses)
+    updated[key] = value
+    return updated
 
 
 def _serialize(value: Any) -> Any:
