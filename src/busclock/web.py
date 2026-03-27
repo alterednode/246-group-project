@@ -57,7 +57,7 @@ async def request_logging_middleware(
 
 async def handle_index(request: web.Request) -> web.Response:
     runtime = request.app["runtime"]
-    state = await runtime.state_store.snapshot()
+    state = runtime.state_store.snapshot()
     config = state.config
     html = f"""
     <!doctype html>
@@ -113,7 +113,7 @@ async def handle_index(request: web.Request) -> web.Response:
 
 async def handle_get_config(request: web.Request) -> web.Response:
     runtime = request.app["runtime"]
-    state = await runtime.state_store.snapshot()
+    state = runtime.state_store.snapshot()
     LOGGER.debug("Returning config payload")
     return web.json_response(state.config.to_dict())
 
@@ -144,14 +144,14 @@ async def handle_update_config(request: web.Request) -> web.Response:
 
 async def handle_get_state(request: web.Request) -> web.Response:
     runtime = request.app["runtime"]
-    state = await runtime.state_store.snapshot()
+    state = runtime.state_store.snapshot()
     LOGGER.debug("Returning full system state payload")
     return web.json_response(state.to_dict())
 
 
 async def handle_health(request: web.Request) -> web.Response:
     runtime = request.app["runtime"]
-    state = await runtime.state_store.snapshot()
+    state = runtime.state_store.snapshot()
     LOGGER.debug("Returning health payload")
     payload = {
         "status": "ok",
