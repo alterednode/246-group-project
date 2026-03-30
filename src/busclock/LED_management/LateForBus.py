@@ -4,7 +4,7 @@ import time
 def lateForBus_frame(self):
         frame= blank_frame()
         for i in range(num_leds):
-            frame[i]=RGB(252,3,3)
+            frame[i]=RGB(100,3,3)
         return frame
 def lateForBus_animation(self):
     while True:

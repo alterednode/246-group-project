@@ -4,7 +4,7 @@ class SunnyAnimation:
     def sun_frame(self):
         frame = blank_frame()
         for i in range(num_leds):
-            frame[i]=RGB(255,255,0)
+            frame[i]=RGB(100,100,0)
         return frame
     def sun_animation(self):
         while True:
