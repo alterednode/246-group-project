@@ -16,15 +16,9 @@ class MotorControl:
 
     def __init__(self):
         GPIO.setmode( GPIO.BCM )
-        GPIO.setup(self.pins[0], GPIO.OUT)
-        GPIO.setup(self.pins[1], GPIO.OUT)
-        GPIO.setup(self.pins[2], GPIO.OUT)
-        GPIO.setup(self.pins[3], GPIO.OUT)
-
-        GPIO.output(self.pins[0], GPIO.LOW)
-        GPIO.output(self.pins[1], GPIO.LOW)
-        GPIO.output(self.pins[2], GPIO.LOW)
-        GPIO.output(self.pins[3], GPIO.LOW)
+        for pin in self.pins:
+            GPIO.setup(pin, GPIO.OUT)
+            GPIO.output(pin, GPIO.LOW)
 
     def step(self, steps):
         step = -2 if steps < 0 else 2
