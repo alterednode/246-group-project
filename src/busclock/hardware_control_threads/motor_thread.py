@@ -13,5 +13,4 @@ def run_motor_thread(
     while not stop_event.is_set():
         state = state_store.snapshot()
         _ = state.transit
-        _ = state.hardware.clock_hands
         # Add motor logic here.

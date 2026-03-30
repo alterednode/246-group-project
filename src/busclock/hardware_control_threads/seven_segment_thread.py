@@ -13,5 +13,4 @@ def run_seven_segment_thread(
     while not stop_event.is_set():
         state = state_store.snapshot()
         _ = state.transit
-        _ = state.hardware.countdown_display
         # Add 7-segment logic here.

@@ -13,5 +13,4 @@ def run_led_thread(
     while not stop_event.is_set():
         state = state_store.snapshot()
         _ = state.transit
-        _ = state.hardware.led_display
         # Add LED logic here.

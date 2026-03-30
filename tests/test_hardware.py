@@ -90,7 +90,6 @@ async def test_runtime_invokes_hardware_handlers_on_start(tmp_path: Path) -> Non
         await runtime.stop()
 
     assert state.transit.leave_at is not None
-    assert state.hardware.led_display.active_pattern is None
 
 
 @pytest.mark.asyncio
