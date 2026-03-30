@@ -17,7 +17,7 @@ from .api.transit_route import (
 )
 from .api.weather import CurrentWeather, GeocodedLocation, WeatherClient
 from .config import AppConfig, ConfigStore
-from .hardware import (
+from .hardware_control_threads import (
     run_led_thread,
     run_motor_thread,
     run_seven_segment_thread,
