@@ -51,6 +51,27 @@ class WeatherSnapshot:
     resolved_location: str | None = None
     temperature_c: float | None = None
     feels_like_c: float | None = None
+    temp_min_c: float | None = None
+    temp_max_c: float | None = None
+    pressure_hpa: int | None = None
+    humidity_percent: int | None = None
+    sea_level_hpa: int | None = None
+    ground_level_hpa: int | None = None
+    visibility_m: int | None = None
+    wind_speed_mps: float | None = None
+    wind_direction_deg: int | None = None
+    wind_gust_mps: float | None = None
+    cloudiness_percent: int | None = None
+    rain_1h_mm: float | None = None
+    rain_3h_mm: float | None = None
+    snow_1h_mm: float | None = None
+    snow_3h_mm: float | None = None
+    observed_at: datetime | None = None
+    sunrise_at: datetime | None = None
+    sunset_at: datetime | None = None
+    timezone_offset_seconds: int | None = None
+    condition: str | None = None
+    condition_code: int | None = None
     description: str | None = None
     icon: str | None = None
 

@@ -10,7 +10,7 @@ import pytest
 from busclock.api.transit_route import SelectedTransitRoute, TransitRoute, TransitStep
 from busclock.api.weather import CurrentWeather, GeocodedLocation
 from busclock.config import AppConfig, ConfigStore
-from busclock.runtime import BusClockRuntime, build_transit_snapshot
+from busclock.runtime import BusClockRuntime, build_transit_snapshot, build_weather_snapshot
 
 
 @pytest.mark.asyncio
@@ -57,6 +57,59 @@ async def test_build_transit_snapshot_uses_google_departure_minus_buffer() -> No
     assert snapshot.bus_departure_time == google_departure + timedelta(minutes=5)
     assert snapshot.end_latitude == 49.94
     assert snapshot.end_longitude == -119.39
+
+
+def test_build_weather_snapshot_copies_extended_fields() -> None:
+    config = AppConfig(
+        home_location="Home",
+        destination="Campus",
+        preferred_bus_line="97",
+        weather_location_mode="destination",
+    )
+    weather = CurrentWeather(
+        location=GeocodedLocation(
+            query="Campus",
+            name="University Way",
+            latitude=49.94,
+            longitude=-119.39,
+            country="CA",
+            state="BC",
+        ),
+        temperature_c=10.0,
+        feels_like_c=8.0,
+        description="light rain",
+        icon="10d",
+        condition="Rain",
+        condition_code=500,
+        temp_min_c=9.0,
+        temp_max_c=11.0,
+        pressure_hpa=1008,
+        humidity_percent=82,
+        visibility_m=9000,
+        wind_speed_mps=3.6,
+        wind_direction_deg=220,
+        wind_gust_mps=5.1,
+        cloudiness_percent=75,
+        rain_1h_mm=0.45,
+        observed_at=datetime(2026, 3, 27, 12, 0, tzinfo=timezone.utc),
+        sunrise_at=datetime(2026, 3, 27, 13, 45, tzinfo=timezone.utc),
+        sunset_at=datetime(2026, 3, 28, 2, 15, tzinfo=timezone.utc),
+        timezone_offset_seconds=-25200,
+    )
+
+    snapshot = build_weather_snapshot(weather, config)
+
+    assert snapshot.query == "Campus"
+    assert snapshot.resolved_location == "University Way, BC, CA"
+    assert snapshot.condition == "Rain"
+    assert snapshot.condition_code == 500
+    assert snapshot.humidity_percent == 82
+    assert snapshot.pressure_hpa == 1008
+    assert snapshot.wind_speed_mps == 3.6
+    assert snapshot.rain_1h_mm == 0.45
+    assert snapshot.observed_at == datetime(2026, 3, 27, 12, 0, tzinfo=timezone.utc)
+    assert snapshot.sunrise_at == datetime(2026, 3, 27, 13, 45, tzinfo=timezone.utc)
+    assert snapshot.sunset_at == datetime(2026, 3, 28, 2, 15, tzinfo=timezone.utc)
 
 
 @pytest.mark.asyncio
