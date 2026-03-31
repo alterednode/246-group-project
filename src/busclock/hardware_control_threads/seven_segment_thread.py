@@ -13,4 +13,5 @@ def run_seven_segment_thread(
     while not stop_event.is_set():
         state = state_store.snapshot()
         _ = state.transit
+        return # not actually using this
         # Add 7-segment logic here.
