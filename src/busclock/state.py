@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import threading
-from dataclasses import dataclass, field, fields, is_dataclass, replace
+from dataclasses import dataclass, fields, is_dataclass, replace
 from datetime import datetime, timezone
 from typing import Any
 
@@ -51,39 +51,29 @@ class WeatherSnapshot:
     resolved_location: str | None = None
     temperature_c: float | None = None
     feels_like_c: float | None = None
+    temp_min_c: float | None = None
+    temp_max_c: float | None = None
+    pressure_hpa: int | None = None
+    humidity_percent: int | None = None
+    sea_level_hpa: int | None = None
+    ground_level_hpa: int | None = None
+    visibility_m: int | None = None
+    wind_speed_mps: float | None = None
+    wind_direction_deg: int | None = None
+    wind_gust_mps: float | None = None
+    cloudiness_percent: int | None = None
+    rain_1h_mm: float | None = None
+    rain_3h_mm: float | None = None
+    snow_1h_mm: float | None = None
+    snow_3h_mm: float | None = None
+    observed_at: datetime | None = None
+    sunrise_at: datetime | None = None
+    sunset_at: datetime | None = None
+    timezone_offset_seconds: int | None = None
+    condition: str | None = None
+    condition_code: int | None = None
     description: str | None = None
     icon: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class ClockHandsSnapshot:
-    total_steps_moved: int = 0
-    current_steps: int | None = None
-    last_target_steps: int | None = None
-    last_target_time: datetime | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class CountdownDisplaySnapshot:
-    text: str | None = None
-    remaining_seconds: int | None = None
-    show_colon: bool = False
-
-
-@dataclass(frozen=True, slots=True)
-class LedDisplaySnapshot:
-    active_pattern: str | None = None
-    frame_index: int = 0
-    is_animating: bool = False
-
-
-@dataclass(frozen=True, slots=True)
-class HardwareSnapshot:
-    clock_hands: ClockHandsSnapshot = field(default_factory=ClockHandsSnapshot)
-    countdown_display: CountdownDisplaySnapshot = field(
-        default_factory=CountdownDisplaySnapshot
-    )
-    led_display: LedDisplaySnapshot = field(default_factory=LedDisplaySnapshot)
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,7 +81,6 @@ class SystemState:
     config: AppConfig
     transit: TransitSnapshot
     weather: WeatherSnapshot
-    hardware: HardwareSnapshot
     status: dict[str, RefreshStatus]
     updated_at: datetime | None = None
 
@@ -106,7 +95,6 @@ class StateStore:
             config=config,
             transit=TransitSnapshot(),
             weather=WeatherSnapshot(),
-            hardware=HardwareSnapshot(),
             status={
                 "transit": RefreshStatus(state="idle"),
                 "weather": RefreshStatus(state="idle"),
@@ -172,66 +160,6 @@ class StateStore:
                 ),
                 updated_at=now,
             )
-
-    def update_clock_hands(
-        self,
-        *,
-        target_steps: int,
-        target_time: datetime,
-    ) -> None:
-        with self._lock:
-            current = self._state.hardware.clock_hands
-            if (
-                current.current_steps == target_steps
-                and current.last_target_time == target_time
-            ):
-                return
-
-            previous_steps = current.current_steps or 0
-            self._state = replace(
-                self._state,
-                hardware=replace(
-                    self._state.hardware,
-                    clock_hands=ClockHandsSnapshot(
-                        total_steps_moved=current.total_steps_moved
-                        + abs(target_steps - previous_steps),
-                        current_steps=target_steps,
-                        last_target_steps=target_steps,
-                        last_target_time=target_time,
-                    ),
-                ),
-                updated_at=_utcnow(),
-            )
-
-    def update_countdown_display(
-        self,
-        *,
-        text: str,
-        remaining_seconds: int | None,
-        show_colon: bool,
-    ) -> None:
-        with self._lock:
-            current = self._state.hardware.countdown_display
-            if (
-                current.text == text
-                and current.remaining_seconds == remaining_seconds
-                and current.show_colon == show_colon
-            ):
-                return
-
-            self._state = replace(
-                self._state,
-                hardware=replace(
-                    self._state.hardware,
-                    countdown_display=CountdownDisplaySnapshot(
-                        text=text,
-                        remaining_seconds=remaining_seconds,
-                        show_colon=show_colon,
-                    ),
-                ),
-                updated_at=_utcnow(),
-            )
-
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)

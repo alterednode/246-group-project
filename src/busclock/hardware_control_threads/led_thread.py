@@ -4,14 +4,13 @@ import threading
 
 from ..state import StateStore
 
-def run_motor_thread(
+def run_led_thread(
     *,
     state_store: StateStore,
     stop_event: threading.Event,
 ) -> None:
-    # Add motor setup here when the real hardware is wired.
+    # Add LED setup here when the real hardware is wired.
     while not stop_event.is_set():
         state = state_store.snapshot()
         _ = state.transit
-        _ = state.hardware.clock_hands
-        # Add motor logic here.
+        # Add LED logic here.

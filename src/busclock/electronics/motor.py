@@ -1,5 +1,9 @@
 import time 
-import RPi.GPIO as GPIO
+try:
+    import RPi.GPIO as GPIO
+except ImportError:
+    import Mock.GPIO as GPIO
+
 
 class MotorControl:
     # in1, in2, in3, in4

@@ -8,8 +8,10 @@ Clock mapping
     clockwise (bool)    -> True = forward, False = backward
 """
 
+# 2048 steps for one full rotation of motor.
+
 # Updated for FULL-STEP motor
-STEPS_PER_FULL_CLOCK_CYCLE = 2858
+STEPS_PER_FULL_CLOCK_CYCLE = 33636
 
 # 12 hours = 720 minutes
 MINUTES_PER_FULL_CLOCK_CYCLE = 720
