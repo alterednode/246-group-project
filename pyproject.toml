@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "aiohttp>=3.10,<4.0",
+    "board>=1.0",
     "mock-gpio>=0.2.0",
     "rpi-gpio>=0.7.1",
 ]
