@@ -62,17 +62,13 @@ def main() -> int:
         return 1
 
     controller = LEDControl()
-    try:
-        led(
-            TEST_ANIMATION,
-            controller,
-            frames=TEST_FRAMES,
-            duration_seconds=TEST_DURATION_SECONDS,
-        )
-    except KeyboardInterrupt:
-        return 130
-    finally:
-        controller.display(blank_frame())
+    led(
+        TEST_ANIMATION,
+        controller,
+        frames=TEST_FRAMES,
+        duration_seconds=TEST_DURATION_SECONDS,
+    )
+    controller.display(blank_frame())
 
     return 0
 
