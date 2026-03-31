@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import signal
 from contextlib import suppress
 
 from aiohttp import web
@@ -20,6 +21,18 @@ async def main() -> None:
     LOGGER.info("Starting BusClock application")
 
     runtime = BusClockRuntime()
+
+    # Register signal handlers so a SIGINT/SIGTERM will set the hardware
+    # stop event immediately and allow threads to exit cleanly.
+    loop = asyncio.get_running_loop()
+    try:
+        loop.add_signal_handler(signal.SIGINT, runtime._hardware_stop_event.set)
+        loop.add_signal_handler(signal.SIGTERM, runtime._hardware_stop_event.set)
+    except NotImplementedError:
+        # Fall back to the basic signal handlers which receive (signum, frame)
+        signal.signal(signal.SIGINT, lambda s, f: runtime._hardware_stop_event.set())
+        signal.signal(signal.SIGTERM, lambda s, f: runtime._hardware_stop_event.set())
+
     await runtime.start()
 
     app = create_web_app(runtime)
@@ -39,6 +52,11 @@ async def main() -> None:
 
     try:
         await asyncio.Event().wait()
+    except KeyboardInterrupt:
+        LOGGER.info("Keyboard interrupt received, stopping hardware threads")
+        # Ensure stop event is set in case the signal handler didn't run.
+        runtime._hardware_stop_event.set()
+        raise
     finally:
         LOGGER.info("Shutting down BusClock application")
         with suppress(Exception):

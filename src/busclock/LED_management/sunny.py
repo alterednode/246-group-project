@@ -1,12 +1,13 @@
-from RGB import RGB,blank_frame
-from display import display
-class SunnyAnimation:
-    def sun_frame(self):
-        frame = blank_frame()
-        for i in range(num_leds):
-            frame[i]=RGB(100,100,0)
-        return frame
-    def sun_animation(self):
-        while True:
-            frame = self.sun_frame()
-            display(frame)
+from __future__ import annotations
+
+from .RGB import RGB, solid_frame
+from .base import FrameAnimation
+
+
+class SunnyAnimation(FrameAnimation):
+    frame_duration_seconds = 0.5
+    frame_count = 1
+
+    def frame(self, step: int) -> list[RGB]:
+        _ = step
+        return solid_frame(100, 100, 0)
