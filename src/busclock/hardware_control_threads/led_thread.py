@@ -145,35 +145,33 @@ def _seconds_until_leave(
 def _weather_mode(weather: WeatherSnapshot) -> str:
     condition = (weather.condition or "").casefold()
     description = (weather.description or "").casefold()
-
-    return WEATHER_RAIN
-# 
-#    if weather.snow_1h_mm or weather.snow_3h_mm or condition == "snow" or "snow" in description:
-#        return WEATHER_SNOW
-#    if (
-#        weather.rain_1h_mm
-#        or weather.rain_3h_mm
-#        or condition in {"rain", "drizzle", "thunderstorm"}
-#        or "rain" in description
-#        or "drizzle" in description
-#        or "thunder" in description
-#    ):
-#        return WEATHER_RAIN
-#    if condition == "clear":
-#        return WEATHER_SUNNY
-#    if condition in {
-#        "clouds",
-#        "mist",
-#        "smoke",
-#        "haze",
-#        "dust",
-#        "fog",
-#        "sand",
-#        "ash",
-#        "squall",
-#        "tornado",
-#    }:
-#        return WEATHER_CLOUDY
-#    if any(token in description for token in ("cloud", "mist", "fog", "haze", "overcast")):
-#        return WEATHER_CLOUDY
-#    return WEATHER_CLOUDY
+ 
+    if weather.snow_1h_mm or weather.snow_3h_mm or condition == "snow" or "snow" in description:
+        return WEATHER_SNOW
+    if (
+        weather.rain_1h_mm
+        or weather.rain_3h_mm
+        or condition in {"rain", "drizzle", "thunderstorm"}
+        or "rain" in description
+        or "drizzle" in description
+        or "thunder" in description
+    ):
+        return WEATHER_RAIN
+    if condition == "clear":
+        return WEATHER_SUNNY
+    if condition in {
+        "clouds",
+        "mist",
+        "smoke",
+        "haze",
+        "dust",
+        "fog",
+        "sand",
+        "ash",
+        "squall",
+        "tornado",
+    }:
+        return WEATHER_CLOUDY
+    if any(token in description for token in ("cloud", "mist", "fog", "haze", "overcast")):
+        return WEATHER_CLOUDY
+    return WEATHER_CLOUDY
