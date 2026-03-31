@@ -2,7 +2,7 @@ import time
 from RGB import RGB,blank_frame
 from display import display
  
- class RainAnimation:
+class RainAnimation:
     def rain_frame(self, step): 
         if step ==1:
             frame = blank_frame()
