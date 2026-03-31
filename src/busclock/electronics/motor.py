@@ -4,7 +4,6 @@ try:
 except ImportError:
     import Mock.GPIO as GPIO
 
-
 class MotorControl:
     # in1, in2, in3, in4
     pins = [18, 23, 24, 25]
@@ -20,15 +19,9 @@ class MotorControl:
 
     def __init__(self):
         GPIO.setmode( GPIO.BCM )
-        GPIO.setup(self.pins[0], GPIO.OUT)
-        GPIO.setup(self.pins[1], GPIO.OUT)
-        GPIO.setup(self.pins[2], GPIO.OUT)
-        GPIO.setup(self.pins[3], GPIO.OUT)
-
-        GPIO.output(self.pins[0], GPIO.LOW)
-        GPIO.output(self.pins[1], GPIO.LOW)
-        GPIO.output(self.pins[2], GPIO.LOW)
-        GPIO.output(self.pins[3], GPIO.LOW)
+        for pin in self.pins:
+            GPIO.setup(pin, GPIO.OUT)
+            GPIO.output(pin, GPIO.LOW)
 
     def step(self, steps):
         step = -2 if steps < 0 else 2
