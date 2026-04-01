@@ -40,12 +40,10 @@ class MotorControl:
 
 if __name__ == "__main__":
     motor = MotorControl()
-    steps = 2048
+    steps = 150
     try:
-        while(1):
-            motor.step(steps)
-            time.sleep(1)
-            steps *= -1
+        motor.step(steps)
     except KeyboardInterrupt:
         motor.cleanup()
         exit(1)
+    motor.cleanup()
