@@ -10,4 +10,4 @@ class CloudyAnimation(FrameAnimation):
 
     def frame(self, step: int) -> list[RGB]:
         _ = step
-        return solid_frame(60, 60, 90)
+        return solid_frame(10, 10, 15)

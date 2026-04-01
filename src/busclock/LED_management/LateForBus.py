@@ -13,7 +13,7 @@ class SoonBusAnimation(FrameAnimation):
         frame = solid_frame(pulse, pulse // 2, 0)
         accent = min(pulse + 30, 160)
         for index in range(0, num_leds, 6):
-            frame[index] = RGB(accent, accent // 2, 0)
+            frame[index] = RGB(accent // 4, accent // 8, 0)
         return frame
 
 

@@ -9,10 +9,10 @@ from .rain_frame import RainAnimation
 from .snowing import SnowAnimation
 from .sunny import SunnyAnimation
 
-ANIMATION_NAMES = ("snowing", "raining", "sunny", "late", "soon", "cloudy", "off")
+ANIMATION_NAMES = ("sunny", "cloudy", "raining", "snowing", "soon", "late", "off")
 TEST_ANIMATION = "sunny"
 TEST_FRAMES: int | None = None
-TEST_DURATION_SECONDS: float | None = 10.0
+TEST_DURATION_SECONDS: float | None = 5.0
 
 
 def animation_for_name(name: str):
@@ -62,13 +62,23 @@ def main() -> int:
         return 1
 
     controller = LEDControl()
-    led(
-        TEST_ANIMATION,
-        controller,
-        frames=TEST_FRAMES,
-        duration_seconds=TEST_DURATION_SECONDS,
-    )
-    controller.display(blank_frame())
+
+    # led(
+    #     "snowing",
+    #     controller,
+    #     frames=TEST_FRAMES,
+    #     duration_seconds=TEST_DURATION_SECONDS,
+    # )
+    # controller.display(blank_frame())
+
+    for i in ANIMATION_NAMES:
+        led(
+            i,
+            controller,
+            frames=TEST_FRAMES,
+            duration_seconds=TEST_DURATION_SECONDS,
+        )
+        controller.display(blank_frame())
 
     return 0
 

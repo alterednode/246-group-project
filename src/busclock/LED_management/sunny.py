@@ -10,4 +10,4 @@ class SunnyAnimation(FrameAnimation):
 
     def frame(self, step: int) -> list[RGB]:
         _ = step
-        return solid_frame(100, 100, 0)
+        return solid_frame(15, 15, 0)
